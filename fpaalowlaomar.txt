@@ -1,0 +1,339 @@
+/*
+<Window x:Class="_04.Konzerte.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:_04.Konzerte"
+        xmlns:vm="clr-namespace:ViewModel;assembly=ViewModel"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+
+    <Window.DataContext>
+        <vm:VMMainWindow/>
+    </Window.DataContext>
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition/>
+            <ColumnDefinition Width="4*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+
+        <ComboBox Name="comboboxKuenstler" Grid.ColumnSpan="2" Margin="20" SelectedIndex="0" ItemsSource="{Binding VmKonzerte}"/>
+
+        <TextBlock Grid.Row="1" Text="frei Plätze" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="1" Grid.Column="1" Margin="20" Text="{Binding ElementName=comboboxKuenstler, Path=SelectedItem.FreiePlaetze}"/>
+        <TextBlock Grid.Row="2" Text="Preis" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="2" Grid.Column="1" Margin="20" Text="{Binding ElementName=comboboxKuenstler, Path=SelectedItem.Preis}"/>
+        <TextBlock Grid.Row="3" Text="Rabatt" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="3" Grid.Column="1" Margin="20" Text="{Binding ElementName=comboboxKuenstler, Path=SelectedItem.Rabatt}"/>
+        <Border BorderBrush="IndianRed" BorderThickness="4" Grid.Row="4" Grid.ColumnSpan="2">
+            <Grid Margin="5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="normal" VerticalAlignment="Bottom"/>
+                <TextBox Grid.Row="1" Text="{Binding Normal}"/>
+                <TextBlock Grid.Column="1" Text="reduziert" VerticalAlignment="Bottom"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Reduziert}"/>
+                <Button Grid.Column="2" Grid.RowSpan="2" Margin="00,10" Content="Kaufen!" Command="{Binding ButtenCommand}" CommandParameter="{Binding ElementName=comboboxKuenstler, Path=SelectedItem}"/>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="5" Grid.ColumnSpan="2" Text="{Binding Nachricht}"/>
+    </Grid>
+</Window>
+
+_______________________________________
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Model
+{
+    public class Konzert
+    {
+        private string bezeichnung;
+        private decimal preis;
+        private int gesamtKarten;
+        private int verkaufteKarten;
+        private decimal gesamteinnahmen;
+        private decimal rabatt;
+        private int freiePlaetze;
+
+        public Konzert(string bezeichnung, int gesamtKarten, int verkaufteKarten, decimal preis, decimal rabatt)
+        {
+            Bezeichnung = bezeichnung;
+            Preis = preis;
+            GesamtKarten = gesamtKarten;
+            VerkaufteKarten = verkaufteKarten;
+            Gesamteinnahmen = gesamtKarten * preis;
+            Rabatt = rabatt;
+            FreiePlaetze = gesamtKarten - verkaufteKarten;
+        }
+
+        public string Bezeichnung { get => bezeichnung; set => bezeichnung = value; }
+        public decimal Preis { get => preis; set => preis = value; }
+        public int GesamtKarten { get => gesamtKarten; set => gesamtKarten = value; }
+        public int VerkaufteKarten { get => verkaufteKarten; set => verkaufteKarten = value; }
+        public decimal Gesamteinnahmen { get => gesamteinnahmen; set => gesamteinnahmen = value; }
+        public decimal Rabatt { get => rabatt; set => rabatt = value; }
+        public int FreiePlaetze { get => freiePlaetze; set => freiePlaetze = value; }
+
+        public decimal Kaufen(int normal, int reduziert)
+        {
+            if(normal + rabatt > freiePlaetze)
+            {
+                return 0;
+            }
+            else
+            {
+                VerkaufteKarten += normal + reduziert;
+                FreiePlaetze -= normal - reduziert;
+                return normal * preis + reduziert * (preis * (1 - rabatt / 100));
+            }
+        }
+
+        public override string ToString()
+        {
+            return bezeichnung;
+        }
+    }
+}
+
+
+_______________________________________
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Model;
+
+namespace ViewModel
+{
+    public class VMMainWindow : INotifyPropertyChanged
+    {
+        private Konzertverwaltung verwaltung;
+        private UserCommand buttenCommand;
+        private ObservableCollection<VMKonzert> vmKonzerte;
+        private int normal;
+        private int reduziert;
+        private string nachricht;
+
+        public VMMainWindow()
+        {
+            Verwaltung = new Konzertverwaltung();
+            VmKonzerte = new ObservableCollection<VMKonzert>();
+            foreach(Konzert konzert in verwaltung.Konzerte)
+            {
+                VmKonzerte.Add(new VMKonzert(konzert));
+            }
+            this.ButtenCommand = new UserCommand(new Action<object>(vmKaufen));
+        }
+
+        public Konzertverwaltung Verwaltung { get => verwaltung; set => verwaltung = value; }
+        public UserCommand ButtenCommand { get => buttenCommand; set => buttenCommand = value; }
+        public ObservableCollection<VMKonzert> VmKonzerte { get => vmKonzerte; set => vmKonzerte = value; }
+        public int Normal { get => normal; set => normal = value; }
+        public int Reduziert { get => reduziert; set => reduziert = value; }
+        public string Nachricht { get => nachricht; set => nachricht = value; }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void onPropertyChanged(string Eigenschaft)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(Eigenschaft));
+        }
+
+        private void vmKaufen(object obj)
+        {
+            if (obj != null)
+            {
+                if (obj is VMKonzert)
+                {
+                    VMKonzert p = (VMKonzert)obj;
+                    nachricht = "Das Ticket kostet " + p.Kaufen(Normal, Reduziert) + " Euro.";
+                    onPropertyChanged("Nachricht");
+                }
+            }
+        }
+    }
+}
+_______________________________________
+
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Data;
+using System.Data.OleDb;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Model
+{
+    public class Konzertverwaltung
+    {
+        OleDbConnection con;
+        OleDbCommand command;
+        OleDbDataReader reader;
+        private ObservableCollection<Konzert> konzerte;
+
+        public Konzertverwaltung()
+        {
+            Konzerte = new ObservableCollection<Konzert>();
+            con = new OleDbConnection(Properties.Settings.Default.DBPath);
+            konzerteLaden();
+        }
+
+        public ObservableCollection<Konzert> Konzerte { get => konzerte; set => konzerte = value; }
+
+        public void konzerteLaden()
+        {
+            con.Open();
+
+            command = con.CreateCommand();
+            command.CommandText = "SELECT * FROM Konzert";
+            command.CommandType = CommandType.TableDirect;
+
+            reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                Konzert t = new Konzert(reader.GetString(1), reader.GetInt32(3), reader.GetInt32(4), reader.GetDecimal(5), reader.GetDecimal(6));
+
+                Konzerte.Add(t);
+            }
+
+            reader.Close();
+            con.Close();
+        }
+    }
+}
+
+_______________________________________
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Input;
+
+namespace ViewModel
+{
+    public class UserCommand : ICommand
+    {
+        //Für diese Aafgabe ist das Event nicht relevant
+        public event EventHandler CanExecuteChanged;
+
+        //kapselt eine Methode, die über einen einzelnen Parameter
+        //verfügt und keinen Wert zurück gibt.
+        private Action<object> action;
+
+        public UserCommand(Action<object> action)
+        {
+            this.action = action;
+        }
+
+        //Die Methode mit der ermittelt wird, ob
+        //der befehl im akt.Zustand ausgeführt werden kann.
+        public bool CanExecute(object parameter)
+        {
+            return true;
+            //throw new NotImplementedException();
+        }
+
+        //Definiert die Methode, die aufgerufen werden soll
+        //wenn der Befehl aufgerufen wird.
+        public void Execute(object parameter)
+        {
+            if (parameter != null)
+                action(parameter);
+        }
+    }
+}
+________________________________________
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Model;
+using System.ComponentModel;
+
+namespace ViewModel
+{
+    public class VMKonzert : INotifyPropertyChanged
+    {
+        Konzert konzert;
+        
+        public VMKonzert(Konzert konzert)
+        {
+            this.konzert = konzert;
+        }
+
+        public VMKonzert(string bezeichnung, int gesamtKarten, int verkaufteKarten, decimal preis, decimal rabatt)
+        {
+            konzert = new Konzert(bezeichnung, gesamtKarten, verkaufteKarten, preis, rabatt);
+        }
+
+        public string Bezeichnung { get => konzert.Bezeichnung; set { konzert.Bezeichnung = value; onPropertyChanged("Bezeichnung");}
+}
+        public decimal Preis { get => konzert.Preis; set { konzert.Preis = value; onPropertyChanged("Preis");}
+}
+        public int GesamtKarten { get => konzert.GesamtKarten; set { konzert.GesamtKarten = value; onPropertyChanged("GesamtKarten");}
+}
+        public int VerkaufteKarten { get => konzert.VerkaufteKarten; set { konzert.VerkaufteKarten = value; onPropertyChanged("VerkaufteKarten");}
+}
+        public decimal Gesamteinnahmen { get => konzert.Gesamteinnahmen; set { konzert.Gesamteinnahmen = value; onPropertyChanged("Gesamteinnahmen");}
+}
+        public decimal Rabatt { get => konzert.Rabatt; set { konzert.Rabatt = value; onPropertyChanged("Rabatt");}
+}
+        public int FreiePlaetze { get => konzert.FreiePlaetze; set { konzert.FreiePlaetze = value; onPropertyChanged("FreiePlaetze");} }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void onPropertyChanged(string Eigenschaft)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(Eigenschaft));
+        }
+
+        public decimal Kaufen(int normal, int reduziert)
+        {
+            decimal i = konzert.Kaufen(normal, reduziert);
+            onPropertyChanged("VerkaufteKarten");
+            onPropertyChanged("FreiePlaetze");
+            onPropertyChanged("Gesamteinnahmen");
+            return i;
+        }
+
+        public override string ToString()
+        {
+            return konzert.ToString();
+        }
+    }
+}
+
+_______________________________________
+
